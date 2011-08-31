@@ -69,6 +69,12 @@ class ChefRundeck < Sinatra::Base
       edit_url = ""
     end
 
+    # Allow overriding the username on a per-node basis.
+    username = ChefRundeck.username
+    if node[:rundeck] && node[:rundeck].has_key?('username')
+      username = node[:rundeck][:username]
+    end
+
     return <<-EOH
 <node name="#{xml_escape(node[:fqdn])}" 
     type="Node" 
@@ -78,7 +84,7 @@ class ChefRundeck < Sinatra::Base
     osName="#{xml_escape(node[:platform])}"
     osVersion="#{xml_escape(node[:platform_version])}"
     tags="#{xml_escape([node.chef_environment, node.run_list.roles.join(',')].join(','))}"
-    username="#{xml_escape(ChefRundeck.username)}"
+    username="#{xml_escape(username)}"
     hostname="#{xml_escape(node[:fqdn])}"
     #{edit_url} />
 EOH
