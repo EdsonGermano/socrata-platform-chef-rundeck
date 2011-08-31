@@ -38,26 +38,42 @@ class ChefRundeck < Sinatra::Base
     response = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE project PUBLIC "-//DTO Labs Inc.//DTD Resources Document 1.0//EN" "project.dtd"><project>'
     Chef::Node.list(true).each do |node_array|
       node = node_array[1]
-      #--
-      # Certain features in Rundeck require the osFamily value to be set to 'unix' to work appropriately. - SRK
-      #++
-      os_family = node[:kernel][:os] =~ /windows/i ? 'windows' : 'unix'
-      response << <<-EOH
-<node name="#{xml_escape(node[:fqdn])}" 
-      type="Node" 
-      description="#{xml_escape(node.name)}"
-      osArch="#{xml_escape(node[:kernel][:machine])}"
-      osFamily="#{xml_escape(os_family)}"
-      osName="#{xml_escape(node[:platform])}"
-      osVersion="#{xml_escape(node[:platform_version])}"
-      tags="#{xml_escape([node.chef_environment, node.run_list.roles.join(',')].join(','))}"
-      username="#{xml_escape(ChefRundeck.username)}"
-      hostname="#{xml_escape(node[:fqdn])}"
-      editUrl="#{xml_escape(ChefRundeck.web_ui_url)}/nodes/#{xml_escape(node.name)}/edit"/>
-EOH
+      response << node_xml(node)
     end
     response << "</project>"
-    response
   end
+
+  get '/:environment' do
+    response = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE project PUBLIC "-//DTO Labs Inc.//DTD Resources Document 1.0//EN" "project.dtd"><project>'
+    Chef::Node.list_by_environment(params[:environment], true).each do |node_array|
+      node = node_array[1]
+      response << node_xml(node)
+    end
+    response << "</project>"
+  end
+
+
+  private
+  def node_xml(node)
+    #--
+    # Certain features in Rundeck require the osFamily value to be set to 'unix' to work appropriately. - SRK
+    #++
+    os_family = node[:kernel][:os] =~ /windows/i ? 'windows' : 'unix'
+
+    return <<-EOH
+<node name="#{xml_escape(node[:fqdn])}" 
+    type="Node" 
+    description="#{xml_escape(node.name)}"
+    osArch="#{xml_escape(node[:kernel][:machine])}"
+    osFamily="#{xml_escape(os_family)}"
+    osName="#{xml_escape(node[:platform])}"
+    osVersion="#{xml_escape(node[:platform_version])}"
+    tags="#{xml_escape([node.chef_environment, node.run_list.roles.join(',')].join(','))}"
+    username="#{xml_escape(ChefRundeck.username)}"
+    hostname="#{xml_escape(node[:fqdn])}"
+    editUrl="#{xml_escape(ChefRundeck.web_ui_url)}/nodes/#{xml_escape(node.name)}/edit"/>
+EOH
+  end
+
 end
 
