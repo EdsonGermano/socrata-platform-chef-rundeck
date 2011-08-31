@@ -60,6 +60,15 @@ class ChefRundeck < Sinatra::Base
     #++
     os_family = node[:kernel][:os] =~ /windows/i ? 'windows' : 'unix'
 
+    # Optionally use the edit_url if we passed it in on the command line
+    if node[:rundeck] && node[:rundeck].has_key?('edit_url')
+      edit_url = %Q{editUrl="#{xml_escape(node[:rundeck][:edit_url])}"}
+    elsif ChefRundeck.web_ui_url
+      edit_url = %Q{editUrl="#{xml_escape(ChefRundeck.web_ui_url)}/nodes/#{xml_escape(node.name)}/edit"}
+    else
+      edit_url = ""
+    end
+
     return <<-EOH
 <node name="#{xml_escape(node[:fqdn])}" 
     type="Node" 
@@ -71,7 +80,7 @@ class ChefRundeck < Sinatra::Base
     tags="#{xml_escape([node.chef_environment, node.run_list.roles.join(',')].join(','))}"
     username="#{xml_escape(ChefRundeck.username)}"
     hostname="#{xml_escape(node[:fqdn])}"
-    editUrl="#{xml_escape(ChefRundeck.web_ui_url)}/nodes/#{xml_escape(node.name)}/edit"/>
+    #{edit_url} />
 EOH
   end
 
