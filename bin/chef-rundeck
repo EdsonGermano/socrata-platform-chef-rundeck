@@ -51,10 +51,10 @@ end
 cli = ChefRundeckCLI.new
 cli.parse_options
 
-ChefRundeck.config_file = cli.config[:config_file]
-ChefRundeck.username = cli.config[:username]
-ChefRundeck.web_ui_url = cli.config[:web_ui_url]
-ChefRundeck.configure
+ChefRundeck::Server.config_file = cli.config[:config_file]
+ChefRundeck::Server.username = cli.config[:username]
+ChefRundeck::Server.web_ui_url = cli.config[:web_ui_url]
+ChefRundeck::Server.configure
 
-ChefRundeck.run! :host => 'localhost', :port => cli.config[:port] 
+ChefRundeck::Server.run! :host => 'localhost', :port => cli.config[:port] 
 

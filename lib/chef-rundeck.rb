@@ -18,77 +18,79 @@ require 'sinatra/base'
 require 'chef'
 require 'chef/node'
 require 'chef/mixin/xml_escape'
+require 'chef-rundeck/version'
 
-class ChefRundeck < Sinatra::Base
+module ChefRundeck
+  class Server < Sinatra::Base
 
-  include Chef::Mixin::XMLEscape
+    include Chef::Mixin::XMLEscape
 
-  class << self
-    attr_accessor :config_file
-    attr_accessor :username
-    attr_accessor :web_ui_url
+    class << self
+      attr_accessor :config_file
+      attr_accessor :username
+      attr_accessor :web_ui_url
 
-    def configure
-      Chef::Config.from_file(ChefRundeck.config_file)
-      Chef::Log.level = Chef::Config[:log_level]
+      def configure
+        Chef::Config.from_file(config_file)
+        Chef::Log.level = Chef::Config[:log_level]
+      end
     end
+
+    get '/' do
+      response = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE project PUBLIC "-//DTO Labs Inc.//DTD Resources Document 1.0//EN" "project.dtd"><project>'
+      Chef::Node.list(true).each do |node_array|
+        node = node_array[1]
+        response << node_xml(node)
+      end
+      response << "</project>"
+    end
+
+    get '/:environment' do
+      response = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE project PUBLIC "-//DTO Labs Inc.//DTD Resources Document 1.0//EN" "project.dtd"><project>'
+      Chef::Node.list_by_environment(params[:environment], true).each do |node_array|
+        node = node_array[1]
+        response << node_xml(node)
+      end
+      response << "</project>"
+    end
+
+
+    private
+    def node_xml(node)
+      #--
+      # Certain features in Rundeck require the osFamily value to be set to 'unix' to work appropriately. - SRK
+      #++
+      os_family = node[:kernel][:os] =~ /windows/i ? 'windows' : 'unix'
+
+      # Optionally use the edit_url if we passed it in on the command line
+      if node[:rundeck] && node[:rundeck].has_key?('edit_url')
+        edit_url = %Q{editUrl="#{xml_escape(node[:rundeck][:edit_url])}"}
+      elsif Server.web_ui_url
+        edit_url = %Q{editUrl="#{xml_escape(web_ui_url)}/nodes/#{xml_escape(node.name)}/edit"}
+      else
+        edit_url = ""
+      end
+
+      # Allow overriding the username on a per-node basis.
+      username = Server.username
+      if node[:rundeck] && node[:rundeck].has_key?('username')
+        username = node[:rundeck][:username]
+      end
+
+      return <<-EOH
+  <node name="#{xml_escape(node[:fqdn])}" 
+      type="Node" 
+      description="#{xml_escape(node.name)}"
+      osArch="#{xml_escape(node[:kernel][:machine])}"
+      osFamily="#{xml_escape(os_family)}"
+      osName="#{xml_escape(node[:platform])}"
+      osVersion="#{xml_escape(node[:platform_version])}"
+      tags="#{xml_escape([node.chef_environment, node.run_list.roles.join(',')].join(','))}"
+      username="#{xml_escape(username)}"
+      hostname="#{xml_escape(node[:fqdn])}"
+      #{edit_url} />
+  EOH
+    end
+
   end
-
-  get '/' do
-    response = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE project PUBLIC "-//DTO Labs Inc.//DTD Resources Document 1.0//EN" "project.dtd"><project>'
-    Chef::Node.list(true).each do |node_array|
-      node = node_array[1]
-      response << node_xml(node)
-    end
-    response << "</project>"
-  end
-
-  get '/:environment' do
-    response = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE project PUBLIC "-//DTO Labs Inc.//DTD Resources Document 1.0//EN" "project.dtd"><project>'
-    Chef::Node.list_by_environment(params[:environment], true).each do |node_array|
-      node = node_array[1]
-      response << node_xml(node)
-    end
-    response << "</project>"
-  end
-
-
-  private
-  def node_xml(node)
-    #--
-    # Certain features in Rundeck require the osFamily value to be set to 'unix' to work appropriately. - SRK
-    #++
-    os_family = node[:kernel][:os] =~ /windows/i ? 'windows' : 'unix'
-
-    # Optionally use the edit_url if we passed it in on the command line
-    if node[:rundeck] && node[:rundeck].has_key?('edit_url')
-      edit_url = %Q{editUrl="#{xml_escape(node[:rundeck][:edit_url])}"}
-    elsif ChefRundeck.web_ui_url
-      edit_url = %Q{editUrl="#{xml_escape(ChefRundeck.web_ui_url)}/nodes/#{xml_escape(node.name)}/edit"}
-    else
-      edit_url = ""
-    end
-
-    # Allow overriding the username on a per-node basis.
-    username = ChefRundeck.username
-    if node[:rundeck] && node[:rundeck].has_key?('username')
-      username = node[:rundeck][:username]
-    end
-
-    return <<-EOH
-<node name="#{xml_escape(node[:fqdn])}" 
-    type="Node" 
-    description="#{xml_escape(node.name)}"
-    osArch="#{xml_escape(node[:kernel][:machine])}"
-    osFamily="#{xml_escape(os_family)}"
-    osName="#{xml_escape(node[:platform])}"
-    osVersion="#{xml_escape(node[:platform_version])}"
-    tags="#{xml_escape([node.chef_environment, node.run_list.roles.join(',')].join(','))}"
-    username="#{xml_escape(username)}"
-    hostname="#{xml_escape(node[:fqdn])}"
-    #{edit_url} />
-EOH
-  end
-
 end
-
