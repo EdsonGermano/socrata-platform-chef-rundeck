@@ -19,6 +19,7 @@ require 'chef'
 require 'chef/node'
 require 'chef/mixin/xml_escape'
 require 'chef-rundeck/version'
+require 'builder'
 
 module ChefRundeck
   class Server < Sinatra::Base
@@ -37,60 +38,57 @@ module ChefRundeck
     end
 
     get '/' do
-      response = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE project PUBLIC "-//DTO Labs Inc.//DTD Resources Document 1.0//EN" "project.dtd"><project>'
-      Chef::Node.list(true).each do |node_array|
-        node = node_array[1]
-        response << node_xml(node)
-      end
-      response << "</project>"
+      @nodes = Chef::Node.list(true).map{|k, v| chef_to_rundeck(v)}
+      builder :nodes
     end
 
-    get '/:environment' do
-      response = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE project PUBLIC "-//DTO Labs Inc.//DTD Resources Document 1.0//EN" "project.dtd"><project>'
-      Chef::Node.list_by_environment(params[:environment], true).each do |node_array|
-        node = node_array[1]
-        response << node_xml(node)
-      end
-      response << "</project>"
+    get '/environment/:environment' do
+      @nodes = Chef::Node.list_by_environment(params[:environment], true).map{|k, v| chef_to_rundeck(v)}
+      builder :nodes
     end
 
+    get '/domain/:domain' do
+      @nodes = Chef::Search::Query.new.search(:node, "domain:#{params[:domain]}")[0].map!{|n| chef_to_rundeck(n)}
+      builder :nodes
+    end
+
+    get '/search' do
+      @nodes = Chef::Search::Query.new.search(:node, params[:q])[0].map{|n| chef_to_rundeck(n)}
+      builder :nodes
+    end
 
     private
-    def node_xml(node)
-      #--
+    def chef_to_rundeck(node)
       # Certain features in Rundeck require the osFamily value to be set to 'unix' to work appropriately. - SRK
-      #++
       os_family = node[:kernel][:os] =~ /windows/i ? 'windows' : 'unix'
+
+      n = { 
+        :name => node[:fqdn],
+        :type => "Node",
+        :description => node.name,
+        :osArch => node[:kernel][:machine],
+        :osFamily => os_family,
+        :osName => node[:platform],
+        :osVersion => node[:platform_version],
+        :tags => [node.chef_environment, node.run_list.roles.join(',')].join(','),
+        :hostname => node[:fqdn]
+      }
 
       # Optionally use the edit_url if we passed it in on the command line
       if node[:rundeck] && node[:rundeck].has_key?('edit_url')
-        edit_url = %Q{editUrl="#{xml_escape(node[:rundeck][:edit_url])}"}
+        n[:edit_url] = %Q{editUrl="#{xml_escape(node[:rundeck][:edit_url])}"}
       elsif Server.web_ui_url
-        edit_url = %Q{editUrl="#{xml_escape(web_ui_url)}/nodes/#{xml_escape(node.name)}/edit"}
-      else
-        edit_url = ""
+        n[:edit_url] = %Q{editUrl="#{xml_escape(web_ui_url)}/nodes/#{xml_escape(node.name)}/edit"}
       end
 
       # Allow overriding the username on a per-node basis.
-      username = Server.username
       if node[:rundeck] && node[:rundeck].has_key?('username')
-        username = node[:rundeck][:username]
+        n[:username] = node[:rundeck][:username]
+      else
+        n[:username] = Server.username
       end
 
-      return <<-EOH
-  <node name="#{xml_escape(node[:fqdn])}" 
-      type="Node" 
-      description="#{xml_escape(node.name)}"
-      osArch="#{xml_escape(node[:kernel][:machine])}"
-      osFamily="#{xml_escape(os_family)}"
-      osName="#{xml_escape(node[:platform])}"
-      osVersion="#{xml_escape(node[:platform_version])}"
-      tags="#{xml_escape([node.chef_environment, node.run_list.roles.join(',')].join(','))}"
-      username="#{xml_escape(username)}"
-      hostname="#{xml_escape(node[:fqdn])}"
-      #{edit_url} />
-  EOH
+      return n
     end
-
   end
 end
