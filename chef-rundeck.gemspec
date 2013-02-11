@@ -15,6 +15,7 @@ Gem::Specification.new do |s|
 
   s.rubyforge_project = "chef-rundeck"
 
+  s.add_dependency "builder"
   s.add_dependency "chef"
   s.add_dependency "sinatra"
   s.add_development_dependency "rspec", ">= 1.2.9"

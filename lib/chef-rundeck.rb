@@ -23,6 +23,9 @@ require 'builder'
 
 module ChefRundeck
   class Server < Sinatra::Base
+    configure do
+      set :views, File.join(File.dirname(__FILE__), '..', 'views')
+    end
 
     include Chef::Mixin::XMLEscape
 
