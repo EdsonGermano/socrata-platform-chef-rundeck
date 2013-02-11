@@ -63,13 +63,13 @@ module ChefRundeck
     private
     def chef_to_rundeck(node)
       # Certain features in Rundeck require the osFamily value to be set to 'unix' to work appropriately. - SRK
-      os_family = node[:kernel][:os] =~ /windows/i ? 'windows' : 'unix'
+      os_family = (node[:kernel] && node[:kernel][:os] =~ /windows/i) ? 'windows' : 'unix'
 
       n = { 
         :name => node[:fqdn],
         :type => "Node",
         :description => node.name,
-        :osArch => node[:kernel][:machine],
+        :osArch => (node[:kernel] && node[:kernel][:machine]),
         :osFamily => os_family,
         :osName => node[:platform],
         :osVersion => node[:platform_version],
